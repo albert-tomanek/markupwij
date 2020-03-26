@@ -68,9 +68,7 @@ public class Markup : Gtk.Overlay
 		set { color_selector.set_rgba(value); }
 	}
 
-	public double width {
-		get { return 8; }
-	}
+	public double width { get; set; default = 12; }
 
 	protected Markup()
 	{
@@ -168,8 +166,8 @@ public class Markup : Gtk.Overlay
 			this.tray.set_reveal_child(true);
 			this.last_move_time = GLib.get_monotonic_time();
 
-			wait.begin(4000, () => {
-				if (GLib.get_monotonic_time() - this.last_move_time > 4000 * 1000) {
+			wait.begin(5000, () => {
+				if (GLib.get_monotonic_time() - this.last_move_time > 5000 * 1000) {
 					this.tray.set_reveal_child(false);
 				}
 			});
@@ -202,6 +200,10 @@ public class Markup : Gtk.Overlay
 
 	/* Misc. */
 
+	int? width_drag_start_y = null;
+	double old_width;
+	uint refresh_thread_id;
+
 	void setup_width_button(Gtk.Button but)
 	{
 		but.draw.connect_after((cr) => {
@@ -211,7 +213,36 @@ public class Markup : Gtk.Overlay
 			cr.set_source_rgb(1, 1, 1);
 			cr.arc(w/2, h/2, this.width / 2, 0, Math.PI * 2);
 			cr.fill();
+
 			return false;
+		});
+
+		Gtk.drag_source_set(but, Gdk.ModifierType.BUTTON1_MASK, null, Gdk.DragAction.PRIVATE);
+
+		but.drag_motion.connect((ctx, x, y) => {
+			if (width_drag_start_y == null) {	// If this is the first motion event, store the start coordinate.
+				width_drag_start_y = y;
+				old_width = this.width;
+			}
+
+			this.width = old_width * Math.pow(1.1, (width_drag_start_y - y) / 20.0);
+			this.width_button.queue_draw();
+			return false;
+		});
+
+		but.drag_begin.connect((ctx) => {
+			this.refresh_thread_id = GLib.Timeout.add(50, () => {	// We're not registered as a drag_dest, so we make our own trigger for the drag_motion callback that is run even when the drag is outside of the widget's bounds.
+				int x; int y;
+				ctx.get_device().get_position(null, out x, out y);
+				but.drag_motion(ctx, x, y, 0);
+				return true;
+			});
+		});
+
+		but.drag_failed.connect((ctx, result) => {
+			width_drag_start_y = null;
+			GLib.Source.remove(refresh_thread_id);
+			return true;
 		});
 	}
 }

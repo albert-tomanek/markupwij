@@ -18,5 +18,6 @@ executable('markup',
 		dependency('gobject-2.0'),
 		dependency('gtk+-3.0'),
 		dependency('gee-0.8'),
+		meson.get_compiler('c').find_library('m'),	# libm; maths library
 	],
 )
