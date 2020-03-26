@@ -14,7 +14,7 @@ private struct Coord
 	}
 }
 
-private class Stroke
+public class Stroke
 {
 	ArrayList<Coord?> coords = new ArrayList<Coord?>();
 	public RGBA color;
@@ -49,6 +49,8 @@ public class Markup : Gtk.Overlay
 	ArrayList<Stroke> strokes = new ArrayList<Stroke>();
 	Stroke?  current = null;
 
+	int undo_index = 0;	// 0 or negative
+
 	[GtkChild]
 	Gtk.DrawingArea canvas;
 
@@ -57,6 +59,9 @@ public class Markup : Gtk.Overlay
 
 	[GtkChild]
 	Gtk.ColorButton color_selector;
+
+	[GtkChild]
+	Gtk.Button width_button;
 
 	public RGBA color {
 		get { return color_selector.get_rgba(); }
@@ -69,6 +74,7 @@ public class Markup : Gtk.Overlay
 
 	protected Markup()
 	{
+		this.setup_width_button(this.width_button);
 		this.canvas.draw.connect((cr) => { return this.draw_canvas(cr); });
 
 		this.color = parse_rgba("red");
@@ -99,19 +105,27 @@ public class Markup : Gtk.Overlay
 		);
 	}
 
+	public void add_stroke(Stroke stroke)
+	{
+		this.strokes = (ArrayList<Stroke>) strokes[0:strokes.size+undo_index];
+		this.strokes.add(stroke);
+
+		this.undo_index = 0;
+	}
+
 	/* Canvas control */
 
     protected bool draw_canvas (Cairo.Context cr)	// Draws the DrawingArea inside us.
 	{
-        int w = this.canvas.get_allocated_width ();
-        int h = this.canvas.get_allocated_height ();
+        var w = this.canvas.get_allocated_width ();
+        var h = this.canvas.get_allocated_height ();
 
 		cr.set_line_join(Cairo.LineJoin.ROUND);
 		cr.set_line_cap(Cairo.LineCap.ROUND);
 
-		foreach (Stroke stroke in this.strokes)
+		for (int i = 0; i < this.strokes.size + undo_index; i++)
 		{
-			stroke.draw(cr);
+			strokes[i].draw(cr);
 		}
 
         return true;
@@ -125,7 +139,7 @@ public class Markup : Gtk.Overlay
 			this.current = new Stroke();
 			this.current.color = this.color;
 			this.current.width = this.width;
-			this.strokes.add(this.current);
+			this.add_stroke(this.current);
 		}
 
         return false;
@@ -139,6 +153,8 @@ public class Markup : Gtk.Overlay
         return false;
     }
 
+	uint64 last_move_time;
+
 	[GtkCallback]
     protected bool canvas_motion_notify (Gdk.EventMotion event)
 	{
@@ -147,9 +163,57 @@ public class Markup : Gtk.Overlay
 			this.current.record(event.x, event.y);
 			this.queue_draw();
 		}
+		else
+		{
+			this.tray.set_reveal_child(true);
+			this.last_move_time = GLib.get_monotonic_time();
+
+			wait.begin(4000, () => {
+				if (GLib.get_monotonic_time() - this.last_move_time > 4000 * 1000) {
+					this.tray.set_reveal_child(false);
+				}
+			});
+		}
 
         return false;
     }
+
+	/* Tray callbacks */
+
+	[GtkCallback]
+	void undo()
+	{
+		if (-this.undo_index < this.strokes.size)
+		{
+			this.undo_index--;
+			this.queue_draw();
+		}
+	}
+
+	[GtkCallback]
+	void redo()
+	{
+		if (this.undo_index < 0)
+		{
+			this.undo_index++;
+			this.queue_draw();
+		}
+	}
+
+	/* Misc. */
+
+	void setup_width_button(Gtk.Button but)
+	{
+		but.draw.connect_after((cr) => {
+			var w = this.width_button.get_allocated_width ();
+			var h = this.width_button.get_allocated_height ();
+
+			cr.set_source_rgb(1, 1, 1);
+			cr.arc(w/2, h/2, this.width / 2, 0, Math.PI * 2);
+			cr.fill();
+			return false;
+		});
+	}
 }
 
 RGBA parse_rgba(string text)
@@ -157,4 +221,13 @@ RGBA parse_rgba(string text)
 	var color = RGBA();
 	color.parse(text);
 	return color;
+}
+
+async void wait(uint millis)
+{
+	GLib.Timeout.add(millis, () => {
+		wait.callback();
+		return false;	// Removes the source
+	});
+	yield;
 }
