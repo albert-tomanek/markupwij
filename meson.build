@@ -1,6 +1,14 @@
-project('markup', 'vala', 'c')
+project('vala', 'c')
+gnome = import('gnome')
+
+resources = gnome.compile_resources(
+    'markup', 'data/markup.gresource.xml',
+    source_dir: 'data/',
+	export: true,
+)
 
 executable('markup',
+	resources,
 	sources: [
 		'src/main.vala',
 		'src/markup.vala',

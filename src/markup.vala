@@ -43,13 +43,19 @@ private class Stroke
 	}
 }
 
+[GtkTemplate (ui = "/com/github/albert-tomanek/markup/markup.ui")]
 public class Markup : Gtk.Overlay
 {
 	ArrayList<Stroke> strokes = new ArrayList<Stroke>();
 	Stroke?  current = null;
 
+	[GtkChild]
 	Gtk.DrawingArea canvas;
-	Gtk.Revealer    tray;
+
+	[GtkChild]
+	Gtk.Revealer tray;
+
+	[GtkChild]
 	Gtk.ColorButton color_selector;
 
 	public RGBA color {
@@ -63,36 +69,9 @@ public class Markup : Gtk.Overlay
 
 	protected Markup()
 	{
-		this.canvas = new Gtk.DrawingArea();
-		this.add(this.canvas);
-
 		this.canvas.draw.connect((cr) => { return this.draw_canvas(cr); });
-		this.canvas.button_press_event.connect  ((evt) => { return this.canvas_button_press(evt); });
-		this.canvas.button_release_event.connect((evt) => { return this.canvas_button_release(evt); });
-		this.canvas.motion_notify_event.connect ((evt) => { return this.canvas_motion_notify(evt); });
 
-		this.tray = new Gtk.Revealer();
-		this.tray.halign = Gtk.Align.CENTER;
-		this.tray.valign = Gtk.Align.END;
-		this.add_overlay(this.tray);
-		this.set_overlay_pass_through(this.tray, true);
-		this.tray.set_reveal_child(true);
-
-		{
-			var box = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 0);
-			box.halign = Gtk.Align.CENTER;
-			box.valign = Gtk.Align.END;
-			box.margin = 12;
-			box.get_style_context().add_class("linked");
-//			box.get_style_context().add_class("osd");
-			this.tray.add(box);
-
-			this.color_selector = new Gtk.ColorButton.with_rgba(parse_rgba("#ff0000"));
-			this.color_selector.get_style_context().add_class("osd");
-			box.add(this.color_selector);
-		}
-
-		this.show_all();
+		this.color = parse_rgba("red");
 	}
 
 	public Markup.with_image(Gdk.Pixbuf img)
@@ -138,6 +117,7 @@ public class Markup : Gtk.Overlay
         return true;
     }
 
+	[GtkCallback]
     protected bool canvas_button_press (Gdk.EventButton event)
 	{
 		if (event.button == 1)
@@ -151,6 +131,7 @@ public class Markup : Gtk.Overlay
         return false;
     }
 
+	[GtkCallback]
     protected bool canvas_button_release (Gdk.EventButton event)
 	{
 		this.current = null;	// This stroke has finished.
@@ -158,6 +139,7 @@ public class Markup : Gtk.Overlay
         return false;
     }
 
+	[GtkCallback]
     protected bool canvas_motion_notify (Gdk.EventMotion event)
 	{
 		if (this.current != null)
